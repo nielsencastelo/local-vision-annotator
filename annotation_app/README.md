@@ -28,9 +28,9 @@ It creates the project `annotations/demo_boxes/` and uses a single class:
 {"id": 0, "name": "BOX", "color": "#f59e0b"}
 ```
 
-The same project can be opened from the Streamlit app after the notebook creates it.
-The Streamlit app also creates this demo project automatically when `data/`
-contains the sample images.
+The same project can be opened from the Streamlit app after the notebook creates
+it. The Streamlit app starts from the project creation/opening flow and does not
+create the demo automatically.
 
 If the notebook annotation window appears too small, increase `max_width` and
 `max_height` in the `run_notebook_annotator(...)` call.

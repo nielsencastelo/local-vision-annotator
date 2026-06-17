@@ -52,11 +52,9 @@ Start the local web app from the project root:
 streamlit run annotation_app/app.py
 ```
 
-In the sidebar, create or open a project, select the image directory, define
-classes, annotate images, update status, and export the final YOLO dataset.
-
-When the repository contains the sample images in `data/`, the app automatically
-creates and opens the `demo_boxes` project with one class: `BOX`.
+In the sidebar, create a new project or open an existing one, select the image
+directory, define classes, annotate images, update status, and export the final
+YOLO dataset.
 
 ## Quick Start with Sample Images
 
@@ -67,13 +65,14 @@ to demonstrate both the notebook workflow and the Streamlit app workflow.
 2. Run the first setup cell. It creates `annotations/demo_boxes/`, indexes the
    images from `data/`, and defines one class: `BOX`.
 3. Run the annotation cell to draw boxes around visible cardboard boxes.
-4. Open the same project in Streamlit if you want to continue in the browser:
+4. Open Streamlit if you want to continue in the browser:
 
 ```bash
 streamlit run annotation_app/app.py
 ```
 
-Then select `demo_boxes` in the sidebar.
+Then select `demo_boxes` in the sidebar if the notebook has already created it,
+or create a new project from the app.
 
 ## Run Annotation from the Notebook
 

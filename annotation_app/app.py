@@ -37,13 +37,8 @@ st.set_page_config(page_title="Local Vision Annotator", layout="wide")
 
 PROJECTS_ROOT = ROOT / "annotations"
 MAX_CANVAS_WIDTH = 1100
-DEMO_PROJECT_NAME = "demo_boxes"
-DEMO_IMAGE_DIR = ROOT / "data"
-DEMO_CLASSES = [{"id": 0, "name": "BOX", "color": "#f59e0b"}]
-DEMO_INSTRUCTIONS = (
-    "Annotate each visible cardboard box. Include partially visible boxes when the box boundary is useful. "
-    "Ignore pallets, forklifts, floor markings, plastic wrap, and background shelves."
-)
+DEFAULT_CLASSES = [{"id": 0, "name": "OBJECT", "color": "#00c8ff"}]
+DEFAULT_INSTRUCTIONS = "Describe what should be annotated and what should be ignored."
 
 
 def patch_streamlit_drawable_canvas_image_url() -> None:
@@ -155,45 +150,27 @@ def next_index(current: int, total: int, step: int) -> int:
     return max(0, min(total - 1, current + step))
 
 
-def has_demo_images() -> bool:
-    return DEMO_IMAGE_DIR.exists() and any(DEMO_IMAGE_DIR.glob("*.jpeg"))
-
-
-def ensure_demo_project() -> Path | None:
-    if not has_demo_images():
-        return None
-    return create_or_update_project(
-        PROJECTS_ROOT,
-        DEMO_PROJECT_NAME,
-        str(DEMO_IMAGE_DIR),
-        DEMO_CLASSES,
-        DEMO_INSTRUCTIONS,
-    )
-
-
 st.title("Local Vision Annotator")
 
 PROJECTS_ROOT.mkdir(exist_ok=True)
-demo_project_path = ensure_demo_project()
 projects = list_projects(PROJECTS_ROOT)
 
 with st.sidebar:
     st.header("Projeto")
     project_options = ["Criar novo"] + [p.name for p in projects]
-    default_project = DEMO_PROJECT_NAME if demo_project_path and DEMO_PROJECT_NAME in project_options else project_options[0]
-    selected_project = st.selectbox("Abrir", project_options, index=project_options.index(default_project))
+    selected_project = st.selectbox("Abrir", project_options)
 
     if selected_project == "Criar novo":
-        project_name = st.text_input("Nome", value=DEMO_PROJECT_NAME if has_demo_images() else "my_project")
-        image_dir = st.text_input("Diretorio de imagens", value=str(DEMO_IMAGE_DIR if has_demo_images() else ROOT / "data"))
+        project_name = st.text_input("Nome", value="my_project")
+        image_dir = st.text_input("Diretorio de imagens", value=str(ROOT / "data"))
         classes_df = st.data_editor(
-            pd.DataFrame(DEMO_CLASSES),
+            pd.DataFrame(DEFAULT_CLASSES),
             num_rows="dynamic",
             width="stretch",
         )
         instructions = st.text_area(
             "Instrucoes",
-            value=DEMO_INSTRUCTIONS,
+            value=DEFAULT_INSTRUCTIONS,
             height=90,
         )
         if st.button("Criar ou atualizar", type="primary"):
@@ -207,8 +184,6 @@ with st.sidebar:
     st.session_state["project_path"] = str(project_path)
     project = load_project(project_path)
     st.caption(str(project_path))
-    if selected_project == DEMO_PROJECT_NAME:
-        st.info("Demo loaded: sample images from data/ with class BOX.")
 
     if st.button("Atualizar indice de imagens"):
         rebuild_image_index(project_path)
