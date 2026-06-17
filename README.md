@@ -40,6 +40,10 @@ The notebook annotator uses OpenCV GUI support, so it requires `opencv-python`.
 If your environment has `opencv-python-headless` installed and the notebook GUI
 does not open, remove the headless package and reinstall `opencv-python`.
 
+The app includes a compatibility patch for newer Streamlit versions where
+`streamlit-drawable-canvas` still expects the removed internal
+`image_to_url` helper.
+
 ## Run the Streamlit App
 
 Start the local web app from the project root:

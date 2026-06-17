@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import io
 import sys
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import streamlit.elements.image as st_image
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
@@ -41,6 +44,34 @@ DEMO_INSTRUCTIONS = (
     "Annotate each visible cardboard box. Include partially visible boxes when the box boundary is useful. "
     "Ignore pallets, forklifts, floor markings, plastic wrap, and background shelves."
 )
+
+
+def patch_streamlit_drawable_canvas_image_url() -> None:
+    """Restore the Streamlit internal helper expected by streamlit-drawable-canvas.
+
+    Newer Streamlit versions removed `streamlit.elements.image.image_to_url`,
+    but streamlit-drawable-canvas still calls it for background images.
+    A PNG data URL is enough for the component and keeps the app independent
+    from Streamlit private APIs.
+    """
+    if hasattr(st_image, "image_to_url"):
+        return
+
+    def image_to_url(image, width=None, clamp=False, channels="RGB", output_format="PNG", image_id=None):
+        if not isinstance(image, Image.Image):
+            image = Image.open(image)
+        if channels:
+            image = image.convert(channels)
+        buffer = io.BytesIO()
+        image.save(buffer, format=output_format or "PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        mime = "image/png" if (output_format or "PNG").upper() == "PNG" else "image/jpeg"
+        return f"data:{mime};base64,{encoded}"
+
+    st_image.image_to_url = image_to_url
+
+
+patch_streamlit_drawable_canvas_image_url()
 
 
 def class_name(classes: list[dict], class_id: int) -> str:
@@ -158,7 +189,7 @@ with st.sidebar:
         classes_df = st.data_editor(
             pd.DataFrame(DEMO_CLASSES),
             num_rows="dynamic",
-            use_container_width=True,
+            width="stretch",
         )
         instructions = st.text_area(
             "Instrucoes",
@@ -269,7 +300,7 @@ with top_right:
     rows = canvas_objects_to_rows(objects, scale, loaded_boxes, int(current_class_id))
     boxes_df = st.data_editor(
         boxes_dataframe(rows),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "class_id": st.column_config.SelectboxColumn(
@@ -281,30 +312,30 @@ with top_right:
     )
 
     col_a, col_b = st.columns(2)
-    if col_a.button("Salvar", type="primary", use_container_width=True):
+    if col_a.button("Salvar", type="primary", width="stretch"):
         kept = boxes_df[boxes_df["keep"]] if "keep" in boxes_df else boxes_df
         final_status = "annotated" if len(kept) else status
         save_current(project_path, item, boxes_df, image, final_status, notes)
         st.success("Anotacao salva.")
         st.rerun()
-    if col_b.button("Sem objeto", use_container_width=True):
+    if col_b.button("Sem objeto", width="stretch"):
         save_current(project_path, item, pd.DataFrame([], columns=["keep", "class_id", "x", "y", "width", "height"]), image, "empty", notes)
         st.rerun()
 
     col_c, col_d = st.columns(2)
-    if col_c.button("Revisar depois", use_container_width=True):
+    if col_c.button("Revisar depois", width="stretch"):
         save_current(project_path, item, boxes_df, image, "needs_review", notes)
         st.rerun()
-    if col_d.button("Pular", use_container_width=True):
+    if col_d.button("Pular", width="stretch"):
         meta["status"] = "skipped"
         meta["notes"] = notes
         save_metadata(project_path, item["id"], meta)
         st.rerun()
 
     nav_a, nav_b = st.columns(2)
-    if nav_a.button("Anterior", use_container_width=True):
+    if nav_a.button("Anterior", width="stretch"):
         st.session_state["image_index"] = next_index(st.session_state["image_index"], len(filtered), -1)
         st.rerun()
-    if nav_b.button("Proxima", use_container_width=True):
+    if nav_b.button("Proxima", width="stretch"):
         st.session_state["image_index"] = next_index(st.session_state["image_index"], len(filtered), 1)
         st.rerun()
