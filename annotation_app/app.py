@@ -46,11 +46,30 @@ def patch_streamlit_drawable_canvas_image_url() -> None:
 
     Newer Streamlit versions removed `streamlit.elements.image.image_to_url`,
     but streamlit-drawable-canvas still calls it for background images.
-    A PNG data URL is enough for the component and keeps the app independent
-    from Streamlit private APIs.
+    Prefer Streamlit's current media-file helper when available, so the canvas
+    receives a normal `/media/...` URL instead of a data URL.
     """
     if hasattr(st_image, "image_to_url"):
         return
+
+    try:
+        from streamlit.elements.lib import image_utils
+        from streamlit.elements.lib.layout_utils import LayoutConfig
+
+        def image_to_url(image, width=None, clamp=False, channels="RGB", output_format="PNG", image_id=None):
+            return image_utils.image_to_url(
+                image,
+                LayoutConfig(width=width),
+                clamp,
+                channels,
+                output_format,
+                image_id or "drawable-canvas-bg",
+            )
+
+        st_image.image_to_url = image_to_url
+        return
+    except Exception:
+        pass
 
     def image_to_url(image, width=None, clamp=False, channels="RGB", output_format="PNG", image_id=None):
         if not isinstance(image, Image.Image):

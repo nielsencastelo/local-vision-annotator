@@ -1,0 +1,22 @@
+{
+  "name": "demo_boxes",
+  "display_name": "demo_boxes",
+  "task_type": "bbox",
+  "image_dir": "D:\\Projetos\\local-vision-annotator\\data",
+  "labels_dir": "D:\\Projetos\\local-vision-annotator\\annotations\\demo_boxes\\labels",
+  "classes": [
+    {
+      "id": 0,
+      "name": "BOX",
+      "color": "#00c8ff"
+    }
+  ],
+  "image_extensions": [
+    ".jpg",
+    ".jpeg",
+    ".png"
+  ],
+  "instructions": "Describe what should be annotated and what should be ignored.",
+  "created_at": "2026-06-17T17:23:24",
+  "updated_at": "2026-06-17T17:23:24"
+}
