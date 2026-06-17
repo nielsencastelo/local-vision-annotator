@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from datetime import datetime
+import math
 from pathlib import Path
 from typing import Any
 
@@ -87,10 +88,19 @@ def normalize_classes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     classes = []
     for idx, row in enumerate(rows):
         raw_name = str(row.get("name", "")).strip()
-        if not raw_name:
+        if not raw_name or raw_name.lower() in {"none", "nan"}:
             continue
-        class_id = int(row.get("id", len(classes)))
-        color = str(row.get("color", "")).strip() or DEFAULT_COLORS[idx % len(DEFAULT_COLORS)]
+        raw_id = row.get("id")
+        try:
+            if raw_id is None or (isinstance(raw_id, float) and math.isnan(raw_id)) or str(raw_id).strip() == "":
+                class_id = len(classes)
+            else:
+                class_id = int(raw_id)
+        except (TypeError, ValueError):
+            class_id = len(classes)
+        raw_color = row.get("color")
+        color = "" if raw_color is None else str(raw_color).strip()
+        color = color if color and color.lower() != "nan" else DEFAULT_COLORS[idx % len(DEFAULT_COLORS)]
         classes.append({"id": class_id, "name": raw_name, "color": color})
     if not classes:
         classes.append({"id": 0, "name": "OBJETO", "color": DEFAULT_COLORS[0]})

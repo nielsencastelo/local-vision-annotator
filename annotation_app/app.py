@@ -158,7 +158,9 @@ projects = list_projects(PROJECTS_ROOT)
 with st.sidebar:
     st.header("Projeto")
     project_options = ["Criar novo"] + [p.name for p in projects]
-    selected_project = st.selectbox("Abrir", project_options)
+    preferred_project = st.session_state.get("selected_project")
+    selected_index = project_options.index(preferred_project) if preferred_project in project_options else 0
+    selected_project = st.selectbox("Abrir", project_options, index=selected_index)
 
     if selected_project == "Criar novo":
         project_name = st.text_input("Nome", value="my_project")
@@ -176,6 +178,7 @@ with st.sidebar:
         if st.button("Criar ou atualizar", type="primary"):
             path = create_or_update_project(PROJECTS_ROOT, project_name, image_dir, classes_df.to_dict("records"), instructions)
             st.session_state["project_path"] = str(path)
+            st.session_state["selected_project"] = path.name
             st.session_state["image_index"] = 0
             st.rerun()
         st.stop()
@@ -228,8 +231,16 @@ with st.sidebar:
 
 filtered = [item for item in images if load_metadata(project_path, item["id"], item["path"]).get("status", "pending") in status_filter]
 
+if not images:
+    st.warning(
+        "No images were found for this project. Check the image directory, then click "
+        "`Atualizar indice de imagens` in the sidebar."
+    )
+    st.code(project.get("image_dir", ""), language="text")
+    st.stop()
+
 if not filtered:
-    st.info("Nenhuma imagem encontrada para o filtro atual.")
+    st.info("No images match the current status filter.")
     st.stop()
 
 if "image_index" not in st.session_state:
