@@ -51,6 +51,23 @@ streamlit run annotation_app/app.py
 In the sidebar, create or open a project, select the image directory, define
 classes, annotate images, update status, and export the final YOLO dataset.
 
+## Quick Start with Sample Images
+
+This repository includes three sample warehouse images in `data/`. They are used
+to demonstrate both the notebook workflow and the Streamlit app workflow.
+
+1. Open `annotation.ipynb`.
+2. Run the first setup cell. It creates `annotations/demo_boxes/`, indexes the
+   images from `data/`, and defines one class: `BOX`.
+3. Run the annotation cell to draw boxes around visible cardboard boxes.
+4. Open the same project in Streamlit if you want to continue in the browser:
+
+```bash
+streamlit run annotation_app/app.py
+```
+
+Then select `demo_boxes` in the sidebar.
+
 ## Run Annotation from the Notebook
 
 Open:
@@ -59,12 +76,21 @@ Open:
 annotation.ipynb
 ```
 
-Despite the historical filename, the notebook is now generic. Configure these
-values in the first setup cell:
+The notebook is configured as a demo using `data/`:
+
+```python
+PROJECT_NAME = "demo_boxes"
+IMAGE_DIR = PROJECT_ROOT / "data"
+CLASSES = [
+    {"id": 0, "name": "BOX", "color": "#f59e0b"},
+]
+```
+
+To use your own images, change these values in the first setup cell:
 
 ```python
 PROJECT_NAME = "my_project"
-IMAGE_DIR = BASES_DIR / "my_images"
+IMAGE_DIR = PROJECT_ROOT / "path_to_images"
 CLASSES = [
     {"id": 0, "name": "OBJECT", "color": "#00c8ff"},
 ]
@@ -84,6 +110,17 @@ C      cycle class
 0-9    select class by id
 N/P    next/previous image
 ESC    exit
+```
+
+If the OpenCV annotation window opens too small, increase `max_width` and
+`max_height` in the notebook cell:
+
+```python
+run_notebook_annotator(
+    project_path,
+    max_width=1800,
+    max_height=1200,
+)
 ```
 
 ## Project Layout
@@ -175,6 +212,10 @@ annotation_app/
   yolo_io.py              YOLO read/write and coordinate conversion
 docs/
   plano_app_anotacao_streamlit.md
+data/
+  image_01.jpeg
+  image_02.jpeg
+  image_03.jpeg
 annotation.ipynb
 requirements.txt
 ```

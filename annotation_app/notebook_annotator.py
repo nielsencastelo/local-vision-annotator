@@ -102,8 +102,9 @@ def run_notebook_annotator(
     project_path: str | Path,
     status_filter: Iterable[str] = ("pending", "needs_review"),
     reannotate: bool = False,
-    max_width: int = 1280,
-    max_height: int = 820,
+    max_width: int = 1600,
+    max_height: int = 1080,
+    fullscreen: bool = False,
 ) -> None:
     """Run a generic OpenCV bbox annotator from a notebook cell.
 
@@ -141,6 +142,8 @@ def run_notebook_annotator(
 
     win = f"Anotador - {project.get('display_name', project['name'])}"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+    if fullscreen:
+        cv2.setWindowProperty(win, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
     state = {"drawing": False, "start": (0, 0), "cursor": (0, 0), "boxes": []}
     current_idx = 0
@@ -179,6 +182,8 @@ def run_notebook_annotator(
             display = cv2.resize(image, (canvas_width, canvas_height), interpolation=cv2.INTER_AREA)
             state["boxes"] = read_yolo(label_path(project_path, item["id"]), image_width, image_height)
             cv2.setMouseCallback(win, mouse_callback, {"canvas_width": canvas_width, "scale": scale})
+            if not fullscreen:
+                cv2.resizeWindow(win, canvas_width + 280, canvas_height)
 
             while True:
                 frame = display.copy()
