@@ -56,7 +56,7 @@ classes, annotate images, update status, and export the final YOLO dataset.
 Open:
 
 ```text
-05_anotar_numero_onibus.ipynb
+annotation.ipynb
 ```
 
 Despite the historical filename, the notebook is now generic. Configure these
@@ -175,7 +175,7 @@ annotation_app/
   yolo_io.py              YOLO read/write and coordinate conversion
 docs/
   plano_app_anotacao_streamlit.md
-05_anotar_numero_onibus.ipynb
+annotation.ipynb
 requirements.txt
 ```
 
