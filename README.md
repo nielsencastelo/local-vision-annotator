@@ -51,6 +51,9 @@ streamlit run annotation_app/app.py
 In the sidebar, create or open a project, select the image directory, define
 classes, annotate images, update status, and export the final YOLO dataset.
 
+When the repository contains the sample images in `data/`, the app automatically
+creates and opens the `demo_boxes` project with one class: `BOX`.
+
 ## Quick Start with Sample Images
 
 This repository includes three sample warehouse images in `data/`. They are used
