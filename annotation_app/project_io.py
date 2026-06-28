@@ -167,6 +167,36 @@ def save_metadata(project_path: Path, item_id: str, metadata: dict[str, Any]) ->
     metadata_path(project_path, item_id).write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def state_path(project_path: Path) -> Path:
+    return project_path / "state.json"
+
+
+def load_state(project_path: Path) -> dict[str, Any]:
+    path = state_path(project_path)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def save_state(project_path: Path, state: dict[str, Any]) -> None:
+    state_path(project_path).write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def get_last_image_id(project_path: Path) -> str | None:
+    return load_state(project_path).get("last_image_id")
+
+
+def set_last_image_id(project_path: Path, item_id: str) -> None:
+    state = load_state(project_path)
+    if state.get("last_image_id") == item_id:
+        return
+    state["last_image_id"] = item_id
+    save_state(project_path, state)
+
+
 def progress(project_path: Path, images: list[dict[str, str]]) -> dict[str, int]:
     counts = {status: 0 for status in STATUSES}
     for item in images:

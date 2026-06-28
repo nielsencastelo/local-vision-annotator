@@ -20,6 +20,7 @@ from annotation_app.project_io import (
     DEFAULT_COLORS,
     STATUSES,
     create_or_update_project,
+    get_last_image_id,
     import_legacy_yolo_labels,
     label_path,
     list_projects,
@@ -29,6 +30,7 @@ from annotation_app.project_io import (
     progress,
     rebuild_image_index,
     save_metadata,
+    set_last_image_id,
 )
 from annotation_app.yolo_io import Box, read_yolo, write_yolo
 
@@ -169,6 +171,27 @@ def next_index(current: int, total: int, step: int) -> int:
     return max(0, min(total - 1, current + step))
 
 
+def resume_index(project_path: Path, filtered: list[dict]) -> int:
+    """Position to open at when (re)opening a project.
+
+    Prefer the last image the user was working on (persisted cursor). If that
+    cursor is missing or filtered out, fall back to the last completed image so
+    the user lands where annotation stopped and continues from there.
+    """
+    last_id = get_last_image_id(project_path)
+    if last_id is not None:
+        for index, item in enumerate(filtered):
+            if item["id"] == last_id:
+                return index
+    done_status = {"annotated", "empty", "skipped", "needs_review"}
+    last_done = 0
+    for index, item in enumerate(filtered):
+        status = load_metadata(project_path, item["id"], item["path"]).get("status", "pending")
+        if status in done_status:
+            last_done = index
+    return last_done
+
+
 st.title("Local Vision Annotator")
 
 PROJECTS_ROOT.mkdir(exist_ok=True)
@@ -262,10 +285,14 @@ if not filtered:
     st.info("No images match the current status filter.")
     st.stop()
 
-if "image_index" not in st.session_state:
+if st.session_state.get("cursor_project") != selected_project:
+    st.session_state["image_index"] = resume_index(project_path, filtered)
+    st.session_state["cursor_project"] = selected_project
+elif "image_index" not in st.session_state:
     st.session_state["image_index"] = 0
 st.session_state["image_index"] = min(st.session_state["image_index"], len(filtered) - 1)
 item = filtered[st.session_state["image_index"]]
+set_last_image_id(project_path, item["id"])
 meta = load_metadata(project_path, item["id"], item["path"])
 image_path = Path(item["path"])
 
