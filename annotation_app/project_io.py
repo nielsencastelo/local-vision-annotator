@@ -12,6 +12,9 @@ from typing import Any
 DEFAULT_EXTENSIONS = [".jpg", ".jpeg", ".png"]
 DEFAULT_COLORS = ["#00c8ff", "#f59e0b", "#22c55e", "#ef4444", "#a855f7", "#14b8a6"]
 STATUSES = ["pending", "annotated", "empty", "skipped", "needs_review"]
+# Convencoes de pasta de labels prontas, na ordem em que sao procuradas quando o
+# projeto nao configura `import_labels_dir`.
+IMPORT_DIR_CANDIDATES = ["labels_auto", "labels_numero", "labels"]
 
 
 def now_iso() -> str:
@@ -46,12 +49,13 @@ def default_project(name: str, image_dir: str, path: Path) -> dict[str, Any]:
         "task_type": "bbox",
         "image_dir": str(Path(image_dir).expanduser()),
         "labels_dir": str(path / "labels"),
-        "classes": [{"id": 0, "name": "NUMERO_ONIBUS", "color": "#00c8ff"}],
+        "classes": [{"id": 0, "name": "OBJETO", "color": DEFAULT_COLORS[0]}],
         "image_extensions": DEFAULT_EXTENSIONS,
-        "instructions": (
-            "Anotar os digitos do numero do onibus na placa frontal ou lateral. "
-            "Ignorar numeros desfocados, muito pequenos ou distantes."
-        ),
+        "instructions": "Descreva o que deve ser anotado e o que deve ser ignorado.",
+        # Pastas por projeto usadas pelos botoes da barra lateral. Vazio = usa o
+        # padrao derivado de image_dir.
+        "sync_labels_dir": "",
+        "import_labels_dir": "",
         "created_at": created_at,
         "updated_at": created_at,
     }
@@ -68,20 +72,131 @@ def load_project(path: Path) -> dict[str, Any]:
     return json.loads((path / "project.json").read_text(encoding="utf-8"))
 
 
-def create_or_update_project(base_dir: Path, name: str, image_dir: str, classes: list[dict[str, Any]], instructions: str) -> Path:
+def project_exists(base_dir: Path, name: str) -> bool:
+    return (project_dir(base_dir, name) / "project.json").exists()
+
+
+def sync_labels_dir(project: dict[str, Any]) -> str:
+    """Pasta destino do `sync_to_source_labels` deste projeto."""
+    configured = str(project.get("sync_labels_dir", "") or "").strip()
+    if configured:
+        return configured
+    return str(Path(project["image_dir"]) / "labels_avarias")
+
+
+def import_labels_dir(project: dict[str, Any]) -> str:
+    """Pasta de origem do import de labels YOLO ja prontas deste projeto.
+
+    Sem configuracao explicita, usa a primeira convencao que existir no disco
+    (`labels_auto` da pre-anotacao, `labels_numero` do notebook antigo, ...).
+    """
+    configured = str(project.get("import_labels_dir", "") or "").strip()
+    if configured:
+        return configured
+    image_dir = Path(project["image_dir"])
+    for candidate in IMPORT_DIR_CANDIDATES:
+        if (image_dir / candidate).is_dir():
+            return str(image_dir / candidate)
+    return str(image_dir / IMPORT_DIR_CANDIDATES[0])
+
+
+def create_or_update_project(
+    base_dir: Path,
+    name: str,
+    image_dir: str,
+    classes: list[dict[str, Any]],
+    instructions: str,
+    extra: dict[str, Any] | None = None,
+) -> Path:
     path = project_dir(base_dir, name)
-    if (path / "project.json").exists():
+    exists = (path / "project.json").exists()
+    if exists:
         project = load_project(path)
     else:
         project = default_project(name, image_dir, path)
+
+    previous_image_dir = str(project.get("image_dir", ""))
+    previous_images = load_image_index(path) if exists else []
+
     project["display_name"] = name.strip() or project["name"]
     project["name"] = slugify(name)
     project["image_dir"] = str(Path(image_dir).expanduser())
     project["classes"] = normalize_classes(classes)
     project["instructions"] = instructions.strip()
+    for key, value in (extra or {}).items():
+        project[key] = value
+
     save_project(path, project)
-    rebuild_image_index(path)
+    images = rebuild_image_index(path)
+
+    # Trocar o image_dir muda o caminho relativo e, com ele, o id das imagens.
+    # Sem essa migracao as anotacoes ja feitas ficariam orfas.
+    if exists and project["image_dir"] != previous_image_dir:
+        migrate_annotations_to_new_ids(path, previous_images, images)
     return path
+
+
+def _by_stem(images: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for item in images:
+        grouped.setdefault(Path(item["path"]).stem, []).append(item)
+    return grouped
+
+
+def _has_work(project_path: Path, item: dict[str, str]) -> bool:
+    if label_path(project_path, item["id"]).exists():
+        return True
+    meta_file = metadata_path(project_path, item["id"])
+    if not meta_file.exists():
+        return False
+    try:
+        return json.loads(meta_file.read_text(encoding="utf-8")).get("status", "pending") != "pending"
+    except json.JSONDecodeError:
+        return False
+
+
+def migrate_annotations_to_new_ids(
+    project_path: Path,
+    old_images: list[dict[str, str]],
+    new_images: list[dict[str, str]],
+) -> dict[str, int]:
+    """Reaproveita labels/metadata quando o `image_dir` muda e os ids sao refeitos.
+
+    O id de uma imagem inclui o hash do caminho relativo ao `image_dir`, entao
+    apontar o projeto para outra pasta renomeia todos os ids. As anotacoes sao
+    reencontradas pelo *stem* do arquivo (unico nos dois indices) e movidas para
+    o id novo; o que nao casar continua no disco e e reportado em `orphan`.
+    """
+    old_by_stem = _by_stem(old_images)
+    new_by_stem = _by_stem(new_images)
+
+    moved = orphan = 0
+    for stem, olds in old_by_stem.items():
+        news = new_by_stem.get(stem, [])
+        if len(olds) != 1 or len(news) != 1:
+            orphan += sum(1 for item in olds if _has_work(project_path, item))
+            continue
+
+        old_id, new_id = olds[0]["id"], news[0]["id"]
+        if old_id == new_id or not _has_work(project_path, olds[0]):
+            continue
+
+        old_label = label_path(project_path, old_id)
+        if old_label.exists():
+            label_path(project_path, new_id).write_text(old_label.read_text(encoding="utf-8"), encoding="utf-8")
+            old_label.unlink()
+
+        old_meta = metadata_path(project_path, old_id)
+        if old_meta.exists():
+            meta = json.loads(old_meta.read_text(encoding="utf-8"))
+            meta["image_path"] = news[0]["path"]
+            metadata_path(project_path, new_id).write_text(
+                json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            old_meta.unlink()
+        moved += 1
+
+    return {"moved": moved, "orphan": orphan}
 
 
 def normalize_classes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -167,36 +282,6 @@ def save_metadata(project_path: Path, item_id: str, metadata: dict[str, Any]) ->
     metadata_path(project_path, item_id).write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def state_path(project_path: Path) -> Path:
-    return project_path / "state.json"
-
-
-def load_state(project_path: Path) -> dict[str, Any]:
-    path = state_path(project_path)
-    if path.exists():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-def save_state(project_path: Path, state: dict[str, Any]) -> None:
-    state_path(project_path).write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def get_last_image_id(project_path: Path) -> str | None:
-    return load_state(project_path).get("last_image_id")
-
-
-def set_last_image_id(project_path: Path, item_id: str) -> None:
-    state = load_state(project_path)
-    if state.get("last_image_id") == item_id:
-        return
-    state["last_image_id"] = item_id
-    save_state(project_path, state)
-
-
 def progress(project_path: Path, images: list[dict[str, str]]) -> dict[str, int]:
     counts = {status: 0 for status in STATUSES}
     for item in images:
@@ -206,8 +291,23 @@ def progress(project_path: Path, images: list[dict[str, str]]) -> dict[str, int]
     return counts
 
 
-def import_legacy_yolo_labels(project_path: Path, legacy_labels_dir: Path, class_id: int = 0) -> dict[str, int]:
-    """Import labels generated by the old notebook using image stem matching."""
+def import_legacy_yolo_labels(
+    project_path: Path,
+    legacy_labels_dir: Path,
+    class_id: int | None = 0,
+    status: str = "annotated",
+) -> dict[str, int]:
+    """Import labels generated by the old notebook using image stem matching.
+
+    `class_id=None` importa todas as classes do arquivo (projeto multiclasse);
+    um inteiro mantem so as linhas daquela classe.
+
+    `status` e o status atribuido as imagens que vieram com caixas — use
+    `needs_review` para labels automaticas que ainda precisam de conferencia
+    humana. Arquivo sem nenhuma caixa entra sempre como `empty` (negativa).
+    """
+    if status not in STATUSES:
+        raise ValueError(f"status invalido: {status!r} (esperado um de {STATUSES})")
     images = load_image_index(project_path)
     by_stem: dict[str, list[dict[str, str]]] = {}
     for item in images:
@@ -226,13 +326,13 @@ def import_legacy_yolo_labels(project_path: Path, legacy_labels_dir: Path, class
         lines = []
         for line in label.read_text(encoding="utf-8").splitlines():
             parts = line.strip().split()
-            if parts and parts[0] == str(class_id):
+            if parts and (class_id is None or parts[0] == str(class_id)):
                 lines.append(line.strip())
         target_label = label_path(project_path, item["id"])
         target_label.parent.mkdir(parents=True, exist_ok=True)
         target_label.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
         meta = load_metadata(project_path, item["id"], item["path"])
-        meta["status"] = "annotated" if lines else "empty"
+        meta["status"] = status if lines else "empty"
         save_metadata(project_path, item["id"], meta)
         if lines:
             imported += 1

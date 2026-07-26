@@ -76,3 +76,42 @@ def export_yolo(
     (output_dir / "data.yaml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return output_dir
 
+
+def sync_to_source_labels(
+    project_path: Path,
+    target_dir: Path,
+    include_empty: bool = True,
+) -> dict[str, Any]:
+    """Grava as labels por *stem* da imagem em ``target_dir``.
+
+    Pensado para alimentar o merge do notebook 04 do projeto urubupunga-ml, que
+    procura ``bases/<dataset>/labels_avarias/<stem>.txt``:
+
+    - status ``annotated`` -> escreve ``<stem>.txt`` com as boxes YOLO;
+    - status ``empty``      -> escreve ``<stem>.txt`` vazio (negativa/fundo);
+    - demais status         -> ignorados (continuam pendentes para anotar depois).
+
+    Idempotente: sobrescreve os arquivos a cada execução, então pode rodar
+    quantas vezes quiser conforme avança nas anotações.
+    """
+    images = load_image_index(project_path)
+    target_dir = Path(target_dir).expanduser()
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    written = empty = skipped = 0
+    for item in images:
+        meta = load_metadata(project_path, item["id"], item["path"])
+        status = meta.get("status", "pending")
+        dest = target_dir / f"{Path(item['path']).stem}.txt"
+        if status == "annotated":
+            source_label = label_path(project_path, item["id"])
+            content = source_label.read_text(encoding="utf-8") if source_label.exists() else ""
+            dest.write_text(content, encoding="utf-8")
+            written += 1
+        elif status == "empty" and include_empty:
+            dest.write_text("", encoding="utf-8")
+            empty += 1
+        else:
+            skipped += 1
+    return {"written": written, "empty": empty, "skipped": skipped, "target": str(target_dir)}
+

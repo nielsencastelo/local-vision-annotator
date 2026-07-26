@@ -1,18 +1,16 @@
 @echo off
 setlocal
 
-REM Inicia o anotador web no Windows usando um ambiente virtual (.venv).
+REM Inicia o anotador web de avarias no Windows 11.
 REM Edite CUSTOM_VENV abaixo para apontar para um ambiente especifico.
 REM Exemplo: set "CUSTOM_VENV=C:\tmp\env"
-REM Se deixar vazio, usa/cria um ambiente local em .venv na raiz do projeto.
+REM Se deixar vazio, usa/cria um ambiente local em .venv nesta pasta.
 set "CUSTOM_VENV="
 
-REM Pasta deste script (annotation_app) e raiz do projeto (pasta acima).
-set "APP_DIR=%~dp0"
-pushd "%APP_DIR%.."
-set "PROJECT_ROOT=%CD%"
+cd /d "%~dp0"
 
-set "DEFAULT_VENV=%PROJECT_ROOT%\.venv"
+set "APP_DIR=%~dp0"
+set "DEFAULT_VENV=%APP_DIR%.venv"
 
 if defined CUSTOM_VENV (
     set "VENV_DIR=%CUSTOM_VENV%"
@@ -42,7 +40,6 @@ if not exist "%PYTHON_EXE%" (
         echo.
         echo ERRO: nao foi possivel criar o ambiente Python.
         echo Instale o Python 3 para Windows e marque "Add python.exe to PATH".
-        popd
         pause
         exit /b 1
     )
@@ -52,7 +49,6 @@ if not exist "%PYTHON_EXE%" (
     echo.
     echo ERRO: Python do ambiente nao encontrado:
     echo %PYTHON_EXE%
-    popd
     pause
     exit /b 1
 )
@@ -62,13 +58,12 @@ echo Usando ambiente:
 echo %VENV_DIR%
 echo.
 echo Conferindo dependencias...
-"%PYTHON_EXE%" -m pip install -r "%PROJECT_ROOT%\requirements.txt"
+"%PYTHON_EXE%" -m pip install -r requirements.txt
 if errorlevel 1 (
     echo.
     echo ERRO: falha ao instalar/conferir dependencias.
     echo Verifique sua internet ou rode manualmente:
-    echo "%PYTHON_EXE%" -m pip install -r "%PROJECT_ROOT%\requirements.txt"
-    popd
+    echo "%PYTHON_EXE%" -m pip install -r requirements.txt
     pause
     exit /b 1
 )
@@ -77,7 +72,6 @@ echo.
 echo Iniciando o anotador... abra http://localhost:8501 no navegador.
 echo Para parar, feche esta janela ou pressione CTRL+C.
 echo.
-"%PYTHON_EXE%" -m streamlit run "%PROJECT_ROOT%\annotation_app\app.py"
+"%PYTHON_EXE%" -m streamlit run annotation_app\app.py
 
-popd
 pause
